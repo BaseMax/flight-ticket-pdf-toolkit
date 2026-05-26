@@ -94,17 +94,32 @@ def _style_at(page: fitz.Page, rect: fitz.Rect) -> _Style:
     return _Style("helv", 10.0, 0)
 
 
+def _pick_font(font_name: str) -> str:
+    """Return the closest built-in PDF font for the given embedded font name."""
+    n = font_name.lower()
+    bold   = "bold" in n or "black" in n or "heavy" in n
+    italic = "italic" in n or "oblique" in n
+    if bold and italic:
+        return "hebi"
+    if bold:
+        return "hebo"
+    if italic:
+        return "heit"
+    return "helv"
+
+
 def _write_into(page: fitz.Page, rect: fitz.Rect, text: str, style: _Style) -> None:
     """Insert text into rect, shrinking font size if it does not fit."""
     color = _unpack_rgb(style.color)
+    font  = _pick_font(style.font)
     for size in (style.size, style.size * 0.85, max(6.0, style.size * 0.70)):
-        if page.insert_textbox(rect, text, fontsize=size, fontname="helv",
+        if page.insert_textbox(rect, text, fontsize=size, fontname=font,
                                color=color, align=0) >= 0:
             return
     # Absolute fallback: free-positioned text anchored at the left baseline.
     page.insert_text(
         (rect.x0, rect.y1 - 1), text,
-        fontsize=max(6.0, style.size * 0.70), fontname="helv", color=color,
+        fontsize=max(6.0, style.size * 0.70), fontname=font, color=color,
     )
 
 
@@ -270,8 +285,10 @@ if __name__ == "__main__":
         dst_pnr=random_booking_ref(),  # or hardcode: "XYZ789"
 
         name_replacements={
-            "SEYYEDALI":    "MOHAMMADALI",
-            "MOHAMMADIYEH": "RAHIMI",
+            # Replace the full name as one unit so the lname position
+            # follows the rendered width of the fname rather than the
+            # fixed position of the original lname span.
+            "SEYYEDALI MOHAMMADIYEH": "MOHAMMADALI RAHIMI",
         },
 
         # Uncomment to swap the airline logo (supply your own image):
