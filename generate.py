@@ -288,7 +288,7 @@ if __name__ == "__main__":
             # Replace the full name as one unit so the lname position
             # follows the rendered width of the fname rather than the
             # fixed position of the original lname span.
-            "SEYYEDALI MOHAMMADIYEH": "MOHAMMADALI RAHIMI",
+            "MR SEYYEDALI MOHAMMADIYEH": "MR MOHAMMADALI RAHIMI",
         },
 
         # Uncomment to swap the airline logo (supply your own image):
