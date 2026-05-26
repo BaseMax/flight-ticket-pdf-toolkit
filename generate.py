@@ -24,10 +24,7 @@ from zoneinfo import ZoneInfo
 
 import fitz  # PyMuPDF
 
-
 # ═══════════════════════════════════════════════════════════ Types ═══════════
-
-
 @dataclass(frozen=True)
 class Airport:
     city: str
@@ -42,7 +39,6 @@ class Config:
     input_file: Path
     output_file: Path
 
-    # ── What is currently in the PDF (searched and erased) ───────────────────
     src_departure: Airport
     src_departure_date: str    # "27 May 2026"
     src_departure_time: str    # "10:45"
@@ -51,28 +47,25 @@ class Config:
     src_airline: str           # airline name as it appears in the PDF
     src_pnr: str               # booking reference as it appears in the PDF
 
-    # ── What to write in its place ───────────────────────────────────────────
     dst_departure: Airport
     dst_departure_datetime: str  # "27 May 2026 10:45"
     dst_arrival: Airport
-    flight_duration: str          # "HH:MM"  — used to compute arrival time
+    flight_duration: str # "HH:MM"  — used to compute arrival time
     dst_airline: str
     dst_pnr: str
 
     name_replacements: dict[str, str] = field(default_factory=dict)
     extra_replacements: dict[str, str] = field(default_factory=dict)
-    logo_path: Path | None = None  # replace largest image on each page with this
+    logo_path: Path | None = None
 
 
 class _Style(NamedTuple):
     font: str
     size: float
-    color: int  # packed sRGB integer (PyMuPDF native format)
+    color: int # packed sRGB integer (PyMuPDF native format)
 
 
 # ══════════════════════════════════════════════════════ PDF internals ════════
-
-# Prevent image content from being erased when applying text-only redactions.
 _REDACT_TEXT_ONLY: int = getattr(fitz, "PDF_REDACT_IMAGE_NONE", 0)
 
 
@@ -116,7 +109,6 @@ def _write_into(page: fitz.Page, rect: fitz.Rect, text: str, style: _Style) -> N
         if page.insert_textbox(rect, text, fontsize=size, fontname=font,
                                color=color, align=0) >= 0:
             return
-    # Absolute fallback: free-positioned text anchored at the left baseline.
     page.insert_text(
         (rect.x0, rect.y1 - 1), text,
         fontsize=max(6.0, style.size * 0.70), fontname=font, color=color,
@@ -140,7 +132,6 @@ def apply_replacements(page: fitz.Page, replacements: dict[str, str]) -> None:
         reverse=True,
     )
 
-    # Phase 1 — collect rects and record styles before any redaction
     pending: list[tuple[fitz.Rect, str, _Style]] = []
     for old, new in pairs:
         for rect in page.search_for(old):
@@ -150,10 +141,8 @@ def apply_replacements(page: fitz.Page, replacements: dict[str, str]) -> None:
     if not pending:
         return
 
-    # Phase 2 — single apply call (the fix)
     page.apply_redactions(images=_REDACT_TEXT_ONLY)
 
-    # Phase 3 — insert replacement text
     for rect, text, style in pending:
         _write_into(page, rect, text, style)
 
@@ -173,9 +162,6 @@ def replace_logo(page: fitz.Page, logo: Path) -> None:
     page.insert_image(best_rect, filename=str(logo), keep_proportion=True)
 
 
-# ════════════════════════════════════════════════════════ Time helpers ════════
-
-
 def _parse_hhmm(s: str) -> timedelta:
     h, m = map(int, s.split(":"))
     return timedelta(hours=h, minutes=m)
@@ -192,15 +178,9 @@ def compute_times(cfg: Config) -> tuple[datetime, datetime]:
     return dep, arr
 
 
-# ════════════════════════════════════════════════════ Booking reference ═══════
-
-
 def random_booking_ref(length: int = 6) -> str:
     """Return a random uppercase alphanumeric booking reference."""
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
-
-
-# ══════════════════════════════════════════════════════════════ Core ══════════
 
 
 def _build_replacements(cfg: Config, dep: datetime, arr: datetime) -> dict[str, str]:
@@ -211,7 +191,7 @@ def _build_replacements(cfg: Config, dep: datetime, arr: datetime) -> dict[str, 
         **cfg.extra_replacements,
         cfg.src_airline: cfg.dst_airline,
         cfg.src_pnr: cfg.dst_pnr,
-        # Airport full names (longer — handled before cities/IATA by sort)
+
         s.name:    d.name,
         sa.name:   da.name,
         s.city:    d.city,
@@ -220,7 +200,7 @@ def _build_replacements(cfg: Config, dep: datetime, arr: datetime) -> dict[str, 
         sa.country: da.country,
         s.iata:    d.iata,
         sa.iata:   da.iata,
-        # Date / time
+
         cfg.src_departure_date: dep.strftime("%d %b %Y"),
         cfg.src_departure_time: dep.strftime("%H:%M"),
         cfg.src_arrival_time:   arr.strftime("%H:%M"),
@@ -243,9 +223,7 @@ def process(cfg: Config) -> None:
 
 
 # ═══════════════════════════════════════════════════════════ Config ═══════════
-
 if __name__ == "__main__":
-    # ── Source airports: exactly as the text appears in the input PDF ─────────
     IST = Airport(
         city="Istanbul",
         name="Istanbul Airport",
@@ -261,8 +239,6 @@ if __name__ == "__main__":
         timezone="Asia/Tehran",
     )
 
-    # ── To reroute, swap dst_departure / dst_arrival for different Airport
-    #    objects. To keep the same route, leave them identical to src_*.  ─────
     cfg = Config(
         input_file=Path("input.pdf"),
         output_file=Path("output.pdf"),
@@ -282,15 +258,11 @@ if __name__ == "__main__":
         dst_arrival=IKA,
         flight_duration="03:00",
         dst_airline="Mahan Air",
-        dst_pnr=random_booking_ref(),  # or hardcode: "XYZ789"
+        dst_pnr=random_booking_ref(), # or hardcode: "XYZ789"
 
         name_replacements={
-            # Replace the full name as one unit so the lname position
-            # follows the rendered width of the fname rather than the
-            # fixed position of the original lname span.
             "MR SEYYEDALI MOHAMMADIYEH": "MR MOHAMMADALI RAHIMI",
         },
-
         # Uncomment to swap the airline logo (supply your own image):
         # logo_path=Path("logo.png"),
     )
