@@ -224,7 +224,7 @@ def process(cfg: Config) -> None:
 
     doc.save(cfg.output_file)
     doc.close()
-    print(f"Saved → {cfg.output_file}")
+    print(f"Saved -> {cfg.output_file}")
 
 
 # ═══════════════════════════════════════════════════════════ Config ═══════════
